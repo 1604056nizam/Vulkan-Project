@@ -1,0 +1,30 @@
+# Ignore Visual Studio user-specific files
+.vs/
+*.vcxproj.user
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Ignore CMake build folders
+/build/
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+
+# Ignore IDE and OS temp files
+*.log
+*.obj
+*.exe
+*.dll
+*.pdb
+*.ipch
+*.tlog
+*.VC.db
+*.opendb
+
+# Ignore debug & output
+Debug/
+Release/
+x64/
