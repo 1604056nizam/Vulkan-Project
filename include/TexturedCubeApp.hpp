@@ -20,10 +20,12 @@ private:
 
 	void createVertexBuffer();
 	void createIndexBuffer();
+	bool isDeviceSuitable(VkPhysicalDevice device, VkSurfaceKHR surface);
 
 	GLFWwindow* window;
 
 	VkInstance instance;
+	VkSurfaceKHR surface;
 	VkDevice device;
 
 	VkBuffer vertexBuffer;
@@ -31,4 +33,8 @@ private:
 
 	VkBuffer indexBuffer;
 	VkDeviceMemory indexBufferMemory;
+
+	
+
+	VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
 };
