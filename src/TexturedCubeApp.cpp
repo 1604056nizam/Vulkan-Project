@@ -11,6 +11,7 @@ static VkPresentModeKHR chooseSwapPresentMode(const std::vector<VkPresentModeKHR
 static VkExtent2D chooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities, GLFWwindow* window);
 static VkImageView createImageView(VkDevice device, VkImage image, VkFormat format);
 static VkRenderPass createRenderPass(VkDevice device, VkFormat colorFormat);
+static std::vector<VkFramebuffer> createFramebuffers(VkDevice device, VkRenderPass renderPass, const std::vector<VkImageView>& imageViews, VkExtent2D extent);
 
 
 const uint32_t WIDTH = 800;
@@ -220,6 +221,12 @@ void TexturedCubeApp::initVulkan() {
 	std::cout << "RenderPass created successfully" << std::endl;
 	//end create renderpass
 
+	//create Frame buffers
+	swapChainFramebuffers.resize(swapChainImageViews.size());
+	swapChainFramebuffers = createFramebuffers(device, renderPass, swapChainImageViews, extent);
+
+	std::cout << "Frame Buffers created successfully" << std::endl;
+	//end create frame buffers
 }
 
 void TexturedCubeApp::mainLoop() {
@@ -236,6 +243,10 @@ void TexturedCubeApp::mainLoop() {
 
 void TexturedCubeApp::cleanUp() {
 	std::cout << "Cleaning up (placeholder)" << std::endl;
+	
+	for (auto frameBuffer : swapChainFramebuffers) {
+		vkDestroyFramebuffer(device, frameBuffer, nullptr);
+	}
 	for (auto imageView : swapChainImageViews) {
 		vkDestroyImageView(device, imageView, nullptr);
 	}
@@ -446,4 +457,28 @@ static VkRenderPass createRenderPass(VkDevice device, VkFormat colorFormat) {
 	}
 
 	return renderpass;
+}
+
+static std::vector<VkFramebuffer> createFramebuffers(VkDevice device, VkRenderPass renderPass, const std::vector<VkImageView>& imageViews, VkExtent2D extent) {
+
+	std::vector<VkFramebuffer> framebuffers(imageViews.size());
+
+	for (size_t i = 0; i < imageViews.size(); i++) {
+		VkImageView attachments[] = { imageViews[i] };
+
+		VkFramebufferCreateInfo framebufferInfo{};
+		framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+		framebufferInfo.renderPass = renderPass;
+		framebufferInfo.attachmentCount = 1;
+		framebufferInfo.pAttachments = attachments;
+		framebufferInfo.width = extent.width;
+		framebufferInfo.height = extent.height;
+		framebufferInfo.layers = 1;
+
+		if (vkCreateFramebuffer(device, &framebufferInfo, nullptr, &framebuffers[i]) != VK_SUCCESS) {
+			throw std::runtime_error("Failed to create frame buffer");
+		}
+	}
+
+	return framebuffers;
 }
