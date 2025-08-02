@@ -57,6 +57,7 @@ private:
 
 	VkBuffer indexBuffer;
 	VkDeviceMemory indexBufferMemory;
+	std::vector<VkImageView> swapChainImageViews;
 
 	
 };

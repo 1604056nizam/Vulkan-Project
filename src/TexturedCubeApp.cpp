@@ -9,6 +9,7 @@
 static VkSurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats);
 static VkPresentModeKHR chooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes);
 static VkExtent2D chooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities, GLFWwindow* window);
+static VkImageView createImageView(VkDevice device, VkImage image, VkFormat format);
 
 
 const uint32_t WIDTH = 800;
@@ -103,6 +104,7 @@ void TexturedCubeApp::initVulkan() {
 	vkGetPhysicalDeviceProperties(physicalDevice, &deviceProperties);
 
 	std::cout << "Found GPU: " << deviceProperties.deviceName << std::endl;
+	//end creating physical device
 
 
 	//creating logical device
@@ -194,6 +196,9 @@ void TexturedCubeApp::initVulkan() {
 
 	vkGetSwapchainImagesKHR(device, swapChain, &imageCount, nullptr);
 	swapChainImages.resize(imageCount);
+
+	std::cout << "SwapChain image views created" << std::endl;
+
 	vkGetSwapchainImagesKHR(device, swapChain, &imageCount, swapChainImages.data());
 
 	swapChainImageFormat = surfaceFormat.format;
@@ -201,6 +206,11 @@ void TexturedCubeApp::initVulkan() {
 
 	std::cout << "Swap Chain has been created successfully" << std::endl;
 	//end creating swapchain
+
+	swapChainImageViews.resize(swapChainImages.size());
+	for (size_t i = 0; i < swapChainImages.size(); i++) {
+		swapChainImageViews[i] = createImageView(device, swapChainImages[i], swapChainImageFormat);
+	}
 }
 
 void TexturedCubeApp::mainLoop() {
@@ -217,6 +227,12 @@ void TexturedCubeApp::mainLoop() {
 
 void TexturedCubeApp::cleanUp() {
 	std::cout << "Cleaning up (placeholder)" << std::endl;
+	for (auto imageView : swapChainImageViews) {
+		vkDestroyImageView(device, imageView, nullptr);
+	}
+
+
+	vkDestroySwapchainKHR(device, swapChain, nullptr);
 	vkDestroyDevice(device, nullptr);
 	vkDestroySurfaceKHR(instance, surface, nullptr);
 	vkDestroyInstance(instance, nullptr);
@@ -354,3 +370,27 @@ VkExtent2D chooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities, GLFWwi
 
 	}
 }
+
+static VkImageView createImageView(VkDevice device, VkImage image, VkFormat format) {
+	VkImageViewCreateInfo viewInfo{};
+	viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+	viewInfo.image = image;
+	viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+	viewInfo.format = format;
+	viewInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+	viewInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+	viewInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+	viewInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+	viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	viewInfo.subresourceRange.baseMipLevel = 0;
+	viewInfo.subresourceRange.levelCount = 1;
+	viewInfo.subresourceRange.baseArrayLayer = 0;
+	viewInfo.subresourceRange.layerCount = 1;
+
+	VkImageView imageView;
+	if (vkCreateImageView(device, &viewInfo, nullptr, &imageView) != VK_SUCCESS) {
+		throw std::runtime_error("failed to create image view!");
+	}
+	return imageView;
+}
+
