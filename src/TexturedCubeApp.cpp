@@ -3,9 +3,11 @@
 #include "TexturedCubeApp.hpp"
 #include <iostream>
 #include <GLFW/glfw3.h>
+#include <set>
 
 const uint32_t WIDTH = 800;
 const uint32_t HEIHGT = 600;
+
 
 
 void TexturedCubeApp::run() {
@@ -93,6 +95,48 @@ void TexturedCubeApp::initVulkan() {
 	vkGetPhysicalDeviceProperties(physicalDevice, &deviceProperties);
 
 	std::cout << "Found GPU: " << deviceProperties.deviceName << std::endl;
+
+
+	//Adding logical device
+	QueueFamilyIndices indices = findQueueFamilies(physicalDevice, surface);
+
+	std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
+	std::set<int> uniqueQueueFamilies = { indices.graphicsFamily, indices.presentFamily };
+
+	float queuePriority = 1.0f;
+
+	for (int queueFamily : uniqueQueueFamilies) {
+		VkDeviceQueueCreateInfo queueCreateInfo{};
+		queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+		queueCreateInfo.queueFamilyIndex = queueFamily;
+		queueCreateInfo.queueCount = 1;
+		queueCreateInfo.pQueuePriorities = &queuePriority;
+		queueCreateInfos.push_back(queueCreateInfo);
+	}
+
+	VkPhysicalDeviceFeatures deviceFeatures{};
+
+	VkDeviceCreateInfo deviceCreateInfo{};
+
+	deviceCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+	deviceCreateInfo.queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());
+	deviceCreateInfo.pQueueCreateInfos = queueCreateInfos.data();
+	deviceCreateInfo.pEnabledFeatures = &deviceFeatures;
+	deviceCreateInfo.enabledExtensionCount = 0; // We'll add swapchain extension soon
+	deviceCreateInfo.enabledLayerCount = 0; // Validation layers optional
+
+	if (vkCreateDevice(physicalDevice, &deviceCreateInfo, nullptr, &device) != VK_SUCCESS) {
+		throw std::runtime_error("Failed to create logical device");
+	}
+
+	std::cout << "Logical Device created successfully" << std::endl;
+
+	vkGetDeviceQueue(device, indices.graphicsFamily, 0, &graphicsQueue);
+	vkGetDeviceQueue(device, indices.presentFamily, 0, &presentQueue);
+
+	std::cout << "Graphics and present Queue obtaine" << std::endl;
+
+
 }
 
 void TexturedCubeApp::mainLoop() {
@@ -109,6 +153,7 @@ void TexturedCubeApp::mainLoop() {
 
 void TexturedCubeApp::cleanUp() {
 	std::cout << "Cleaning up (placeholder)" << std::endl;
+	vkDestroyDevice(device, nullptr);
 	vkDestroySurfaceKHR(instance, surface, nullptr);
 	vkDestroyInstance(instance, nullptr);
 	glfwDestroyWindow(window);
@@ -146,4 +191,34 @@ bool TexturedCubeApp::isDeviceSuitable(VkPhysicalDevice device, VkSurfaceKHR sur
 	}
 	
 	return grpahicsFound && presentFound;
+}
+
+TexturedCubeApp::QueueFamilyIndices TexturedCubeApp::findQueueFamilies(VkPhysicalDevice device, VkSurfaceKHR surface) {
+	QueueFamilyIndices indices;
+
+	uint32_t queueFamilyCount = 0;
+	vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, nullptr);
+
+	std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
+	vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, queueFamilies.data());
+
+	for (int i = 0; i < queueFamilyCount; i++) {
+		if (queueFamilies[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) {
+			indices.graphicsFamily = i;
+		}
+
+		VkBool32 presentSupport = false;
+		
+		vkGetPhysicalDeviceSurfaceSupportKHR(device, i, surface, &presentSupport);
+
+		if (presentSupport) {
+			indices.presentFamily = i;
+		}
+
+		if (indices.isComplete()) {
+			break;
+		}
+	}
+
+	return indices;
 }
