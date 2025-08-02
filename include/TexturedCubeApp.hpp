@@ -21,6 +21,12 @@ private:
 		}
 	};
 
+	struct SwapChainSupportDetails {
+		VkSurfaceCapabilitiesKHR capabilities;
+		std::vector<VkSurfaceFormatKHR> formats;
+		std::vector<VkPresentModeKHR> presentModes;
+	};
+
 	void initWindow();
 	void initVulkan();
 	void mainLoop();
@@ -30,6 +36,7 @@ private:
 	void createIndexBuffer();
 	bool isDeviceSuitable(VkPhysicalDevice device, VkSurfaceKHR surface);
 	QueueFamilyIndices findQueueFamilies(VkPhysicalDevice decvice, VkSurfaceKHR surface);
+	SwapChainSupportDetails querySwapChainSupport(VkPhysicalDevice device, VkSurfaceKHR surface);
 
 	GLFWwindow* window;
 
@@ -39,6 +46,11 @@ private:
 	VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
 	VkQueue graphicsQueue;
 	VkQueue presentQueue;
+	VkSwapchainKHR swapChain;
+	std::vector<VkImage> swapChainImages;
+	VkFormat swapChainImageFormat;
+	VkExtent2D swapChainExtent;
+
 
 	VkBuffer vertexBuffer;
 	VkDeviceMemory vertexBufferMemory;
