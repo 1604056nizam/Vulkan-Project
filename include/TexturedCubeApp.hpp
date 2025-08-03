@@ -31,10 +31,15 @@ private:
 	void initVulkan();
 	void mainLoop();
 	void cleanUp();
-
+	void createCommandPool();
+	void createCommandBuffers();
+	void recordCommandBuffers(VkRenderPass renderPass);
 	void createVertexBuffer();
 	void createIndexBuffer();
 	bool isDeviceSuitable(VkPhysicalDevice device, VkSurfaceKHR surface);
+	uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
+
+
 	QueueFamilyIndices findQueueFamilies(VkPhysicalDevice decvice, VkSurfaceKHR surface);
 	SwapChainSupportDetails querySwapChainSupport(VkPhysicalDevice device, VkSurfaceKHR surface);
 
@@ -61,5 +66,7 @@ private:
 	std::vector<VkImageView> swapChainImageViews;
 	VkRenderPass renderPass;
 	std::vector<VkFramebuffer> swapChainFramebuffers;
-	
+
+	VkCommandPool commandPool;
+	std::vector<VkCommandBuffer> commandBuffers;
 };
