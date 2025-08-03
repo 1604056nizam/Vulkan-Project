@@ -38,6 +38,8 @@ private:
 	void createIndexBuffer();
 	bool isDeviceSuitable(VkPhysicalDevice device, VkSurfaceKHR surface);
 	uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
+	void createSyncObject();
+	void drawFrame();
 
 
 	QueueFamilyIndices findQueueFamilies(VkPhysicalDevice decvice, VkSurfaceKHR surface);
@@ -69,4 +71,8 @@ private:
 
 	VkCommandPool commandPool;
 	std::vector<VkCommandBuffer> commandBuffers;
+
+	VkSemaphore imageAvailableSemaphore;
+	VkSemaphore renderFinishedSemaphore;
+	VkFence inFlightFence;
 };
