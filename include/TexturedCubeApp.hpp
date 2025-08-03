@@ -50,7 +50,8 @@ private:
 	std::vector<VkImage> swapChainImages;
 	VkFormat swapChainImageFormat;
 	VkExtent2D swapChainExtent;
-
+	VkPipelineLayout pipelineLayout;
+	VkPipeline graphicsPipeline;
 
 	VkBuffer vertexBuffer;
 	VkDeviceMemory vertexBufferMemory;
