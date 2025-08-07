@@ -2,6 +2,7 @@
 
 #include <vulkan/vulkan.h>
 #include <vector>
+#include <set>
 
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
@@ -31,6 +32,10 @@ private:
 	void initVulkan();
 	void mainLoop();
 	void cleanUp();
+	void createInstance(uint32_t& glfwExtensionCount, const char** glfwExtensions);
+	void createPhysicalDevice(uint32_t& deviceCount, std::vector<VkPhysicalDevice>& devices);
+	void createLogicalDevice(std::set<int>& uniqueQueueFamilies, float& queuePriority, const std::vector<const char*>& deviceExtension);
+	void createSwapChain(QueueFamilyIndices& indices);
 	void createCommandPool();
 	void createCommandBuffers();
 	void recordCommandBuffers(VkRenderPass renderPass);
