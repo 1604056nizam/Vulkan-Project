@@ -80,4 +80,11 @@ private:
 	VkSemaphore imageAvailableSemaphore;
 	VkSemaphore renderFinishedSemaphore;
 	VkFence inFlightFence;
+
+	VkImage depthImage{};
+	VkDeviceMemory depthImageMemory{};
+	VkImageView depthImageView{};
+	VkFormat depthFormat{};
+
+
 };
