@@ -19,7 +19,7 @@ static VkExtent2D chooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities,
 static VkImageView createImageView(VkDevice device, VkImage image, VkFormat format);
 static VkRenderPass createRenderPass(VkDevice device, VkFormat colorFormat, VkFormat depthFormat);
 static std::vector<VkFramebuffer> createFramebuffers(VkDevice device, VkRenderPass renderPass, const std::vector<VkImageView>& imageViews, VkExtent2D extent, VkImageView depthImageView);
-static VkPipeline createGraphicsPipeline(VkDevice device, VkExtent2D extent, VkRenderPass renderpass, VkPipelineLayout& pipelineLayout);
+static VkPipeline createGraphicsPipeline(VkDevice device, VkExtent2D extent, VkRenderPass renderpass, VkDescriptorSetLayout descriptorSetLayout, VkPipelineLayout& pipelineLayout);
 static std::vector<char> readFile(const std::string& filename);
 static VkShaderModule createShaderModule(VkDevice device, const std::vector<char>& code);
 static bool hasStencilComponent(VkFormat format);
@@ -32,14 +32,14 @@ const uint32_t WIDTH = 800;
 const uint32_t HEIGHT = 600;
 
 struct Vertex {
-	float pos[2];     // 2D position (for simple triangle)
-	float color[3];   // RGB color
+	float pos[3];     
+	float color[3];   
 };
 
 const std::vector<Vertex> vertices = {
-	{{ 0.0f, -0.5f}, {1.0f, 0.0f, 0.0f}},  // Bottom center, Red
-	{{ 0.5f,  0.5f}, {0.0f, 1.0f, 0.0f}},  // Top right, Green
-	{{-0.5f,  0.5f}, {0.0f, 0.0f, 1.0f}},  // Top left, Blue
+	{{ 0.0f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}},  // Bottom center, Red
+	{{ 0.5f,  0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}},  // Top right, Green
+	{{-0.5f,  0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}},  // Top left, Blue
 };
 
 
@@ -68,7 +68,6 @@ void TexturedCubeApp::initWindow() {
 }
 
 void TexturedCubeApp::initVulkan() {
-	
 	const std::vector <const char*> deviceExtension = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
 	uint32_t glfwExtensionCount = 0;
 	const char** glfwEntensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
@@ -92,7 +91,6 @@ void TexturedCubeApp::initVulkan() {
 	std::cout << "Found GPU: " << deviceProperties.deviceName << std::endl;
 	//end creating physical device
 
-
 	//creating logical device
 	QueueFamilyIndices indices = findQueueFamilies(physicalDevice, surface);
 	std::set<int> uniqueQueueFamilies = { indices.graphicsFamily, indices.presentFamily };
@@ -104,12 +102,10 @@ void TexturedCubeApp::initVulkan() {
 	std::cout << "Graphics and present Queue obtaine" << std::endl;
 	//end createing logical device
 
-
 	//create swapChain
 	createSwapChain(indices);
 	std::cout << "Swap Chain has been created successfully" << std::endl;
 	//end creating swapchain
-
 
 	//create swapChainImage views
 	swapChainImageViews.resize(swapChainImages.size());
@@ -122,11 +118,17 @@ void TexturedCubeApp::initVulkan() {
 	createImage(device, physicalDevice, swapChainExtent.width, swapChainExtent.height, depthFormat, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, depthImage, depthImageMemory);
 	depthImageView = createDepthImageView(device, depthImage, depthFormat);
 
+	createDescriptorSetLayout();
+
 	//create renderPass
 	this->renderPass = createRenderPass(device, swapChainImageFormat, depthFormat);
 	std::cout << "RenderPass created successfully" << std::endl;
 	//end create renderpass
 
+	//create Graphics pipeline
+	this->graphicsPipeline = createGraphicsPipeline(device, swapChainExtent, this->renderPass, descriptorSetLayout, pipelineLayout);
+	std::cout << "Graphics pipeline created successfully" << std::endl;
+	//end graphics pipeline
 
 	//create Frame buffers
 	swapChainFramebuffers.resize(swapChainImageViews.size());
@@ -134,20 +136,19 @@ void TexturedCubeApp::initVulkan() {
 	std::cout << "Frame Buffers created successfully" << std::endl;
 	//end create frame buffers
 
-	//create Graphics pipeline
-	this->graphicsPipeline = createGraphicsPipeline(device, swapChainExtent, this->renderPass, pipelineLayout);
-	std::cout << "Graphics pipeline created successfully" << std::endl;
-	//end graphics pipeline
-
-
 	createVertexBuffer();
 	//create and allcoated command Buffers
 	createCommandPool();
 	std::cout << "Command Pool Created" << std::endl;
 	createCommandBuffers();
 	std::cout << "Command buffers created" << std::endl;
+
+	// NEW: UBOs + descriptor sets
 	createUniformBuffers();
 	std::cout << "Uniform buffers created" << std::endl;
+	createDescriptorPoolAndSets();
+	std::cout << "Descriptor pools created" << std::endl;
+
 	recordCommandBuffers(this->renderPass);
 	std::cout << "Command buffers allocated" << std::endl;
 	//end create and allocate command Buffers
@@ -176,9 +177,11 @@ void TexturedCubeApp::cleanUp() {
 	for (auto frameBuffer : swapChainFramebuffers) {
 		vkDestroyFramebuffer(device, frameBuffer, nullptr);
 	}
+
 	for (auto imageView : swapChainImageViews) {
 		vkDestroyImageView(device, imageView, nullptr);
 	}
+
 	vkDestroyImageView(device, depthImageView, nullptr);
 	vkDestroyImage(device, depthImage, nullptr);
 	vkFreeMemory(device, depthImageMemory, nullptr);
@@ -190,6 +193,15 @@ void TexturedCubeApp::cleanUp() {
 	vkDestroyCommandPool(device, commandPool, nullptr);
 	vkDestroyBuffer(device, vertexBuffer, nullptr);
 	vkFreeMemory(device, vertexBufferMemory, nullptr);
+
+	for (size_t i = 0; i < uboBuffers.size(); ++i) {
+		if (uboMapped[i]) vkUnmapMemory(device, uboMemories[i]);
+		vkDestroyBuffer(device, uboBuffers[i], nullptr);
+		vkFreeMemory(device, uboMemories[i], nullptr);
+	}
+
+	vkDestroyDescriptorPool(device, descriptorPool, nullptr);
+	vkDestroyDescriptorSetLayout(device, descriptorSetLayout, nullptr);
 	vkDestroyDevice(device, nullptr);
 	vkDestroySurfaceKHR(instance, surface, nullptr);
 	vkDestroyInstance(instance, nullptr);
@@ -204,10 +216,6 @@ void TexturedCubeApp::createInstance(uint32_t& glfwExtensionCount, const char** 
 	std::vector<VkExtensionProperties> extensionProperties(countExtensions);
 	vkEnumerateInstanceExtensionProperties(nullptr, &countExtensions, extensionProperties.data());
 
-	for (uint32_t i = 0; i < extensionProperties.size(); i++) {
-		std::cout << i << "th extension name" << extensionProperties[i].extensionName << std::endl;
-	}
-
 	VkApplicationInfo appInfo{};
 	appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
 	appInfo.pApplicationName = "Textured Cube";
@@ -215,7 +223,6 @@ void TexturedCubeApp::createInstance(uint32_t& glfwExtensionCount, const char** 
 	appInfo.pEngineName = "No Engine";
 	appInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
 	appInfo.apiVersion = VK_API_VERSION_1_0;
-
 
 	VkInstanceCreateInfo createInfo{};
 	createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
@@ -398,6 +405,16 @@ void TexturedCubeApp::recordCommandBuffers(VkRenderPass renderPass)
 		vkCmdBeginRenderPass(commandBuffers[i], &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 		vkCmdBindPipeline(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
 
+		
+		vkCmdBindDescriptorSets(
+			commandBuffers[i],
+			VK_PIPELINE_BIND_POINT_GRAPHICS,
+			pipelineLayout,
+			0,                      
+			1, &descriptorSets[i], 
+			0, nullptr
+		);
+
 		// Bind your vertex buffer
 		VkBuffer vertexBuffers[] = { vertexBuffer };
 		VkDeviceSize offsets[] = { 0 };
@@ -405,8 +422,6 @@ void TexturedCubeApp::recordCommandBuffers(VkRenderPass renderPass)
 
 		// Use the actual number of vertices
 		vkCmdDraw(commandBuffers[i], static_cast<uint32_t>(vertices.size()), 1, 0, 0);
-
-
 
 		vkCmdEndRenderPass(commandBuffers[i]);
 
@@ -573,6 +588,116 @@ void TexturedCubeApp::drawFrame()
 	presentInfo.pResults = nullptr;//optional
 
 	vkQueuePresentKHR(presentQueue, &presentInfo);
+}
+
+void TexturedCubeApp::createDescriptorSetLayout() {
+	VkDescriptorSetLayoutBinding uboBinding{};
+	uboBinding.binding = 0;
+	uboBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	uboBinding.descriptorCount = 1;
+	uboBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+
+	VkDescriptorSetLayoutCreateInfo info{};
+	info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+	info.bindingCount = 1;
+	info.pBindings = &uboBinding;
+
+	if (vkCreateDescriptorSetLayout(device, &info, nullptr, &descriptorSetLayout) != VK_SUCCESS) {
+		throw std::runtime_error("Failed to create descriptor set layout");
+	}
+}
+
+void TexturedCubeApp::createUniformBuffers()
+{
+	//Create one UBO per swapchain image (persistently mapped)
+	VkDeviceSize size = sizeof(UniformBufferObject);
+	uboBuffers.resize(swapChainImages.size());
+	uboMemories.resize(swapChainImages.size());
+	uboMapped.resize(swapChainImages.size(), nullptr);
+
+	for (size_t i = 0; i < swapChainImages.size(); i++) {
+		VkBufferCreateInfo info{};
+		info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+		info.size = size;
+		info.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+		info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+		if (vkCreateBuffer(device, &info, nullptr, &uboBuffers[i]) != VK_SUCCESS) {
+			throw std::runtime_error("Failed to create UBO buffer");
+		}
+
+		VkMemoryRequirements req{};
+		vkGetBufferMemoryRequirements(device, uboBuffers[i], &req);
+
+		VkMemoryAllocateInfo alloc{};
+		alloc.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+		alloc.allocationSize = req.size;
+		alloc.memoryTypeIndex = findMemoryType(req.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+
+		if (vkAllocateMemory(device, &alloc, nullptr, &uboMemories[i]) != VK_SUCCESS) {
+			throw std::runtime_error("Failed to allocate UBO memory");
+		}
+
+		vkBindBufferMemory(device, uboBuffers[i], uboMemories[i], 0);
+
+		if (vkMapMemory(device, uboMemories[i], 0, size, 0, &uboMapped[i]) != VK_SUCCESS) {
+			throw std::runtime_error("Failed to map UBO memory");
+		}
+	}
+
+	
+}
+
+void TexturedCubeApp::createDescriptorPoolAndSets()
+{
+	VkDescriptorPoolSize poolSize{};
+	poolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	poolSize.descriptorCount = static_cast<uint32_t>(swapChainImages.size());
+
+	VkDescriptorPoolCreateInfo poolInfo{};
+	poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+	poolInfo.poolSizeCount = 1;
+	poolInfo.pPoolSizes = &poolSize;
+	poolInfo.maxSets = static_cast<uint32_t>(swapChainImages.size());
+
+	if (vkCreateDescriptorPool(device, &poolInfo, nullptr, &descriptorPool) != VK_SUCCESS) {
+		throw std::runtime_error("Failed to create descriptor pool");
+	}
+
+	std::vector<VkDescriptorSetLayout> layouts(swapChainImages.size(), descriptorSetLayout);
+	VkDescriptorSetAllocateInfo alloc{};
+	alloc.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+	alloc.descriptorPool = descriptorPool;
+	alloc.descriptorSetCount = static_cast<uint32_t>(layouts.size());
+	alloc.pSetLayouts = layouts.data();
+
+	descriptorSets.resize(layouts.size());
+
+	if (vkAllocateDescriptorSets(device, &alloc, descriptorSets.data()) != VK_SUCCESS)
+		throw std::runtime_error("Failed to allocate descriptor sets");
+
+	std::cout << "descriptorSets=" << descriptorSets.size()
+		<< " swapImages=" << swapChainImages.size() << "\n";
+
+	for (size_t i = 0; i < descriptorSets.size(); i++) {
+		VkDescriptorBufferInfo dbi{};
+		dbi.buffer = uboBuffers[i];
+		dbi.offset = 0;
+		dbi.range = sizeof(UniformBufferObject);
+
+		VkWriteDescriptorSet write{};
+		write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		write.dstSet = descriptorSets[i];
+		write.dstBinding = 0;
+		write.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		write.descriptorCount = 1;
+		write.pBufferInfo = &dbi;
+
+		vkUpdateDescriptorSets(device, 1, &write, 0, nullptr);
+	}
+
+
 }
 
 
@@ -780,7 +905,7 @@ static std::vector<VkFramebuffer> createFramebuffers(VkDevice device, VkRenderPa
 	return framebuffers;
 }
 
-static VkPipeline createGraphicsPipeline(VkDevice device, VkExtent2D extent, VkRenderPass renderpass, VkPipelineLayout& pipelineLayout) {
+static VkPipeline createGraphicsPipeline(VkDevice device, VkExtent2D extent, VkRenderPass renderpass, VkDescriptorSetLayout descriptorSetLayout, VkPipelineLayout& pipelineLayout) {
 	auto vertShaderCode = readFile("shaders/vert.spv");
 	auto fragShaderCode = readFile("shaders/frag.spv");
 
@@ -811,7 +936,7 @@ static VkPipeline createGraphicsPipeline(VkDevice device, VkExtent2D extent, VkR
 	std::array<VkVertexInputAttributeDescription, 2> attributeDescriptions{};
 	attributeDescriptions[0].binding = 0;
 	attributeDescriptions[0].location = 0;
-	attributeDescriptions[0].format = VK_FORMAT_R32G32_SFLOAT;
+	attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT;
 	attributeDescriptions[0].offset = offsetof(Vertex, pos);
 
 	attributeDescriptions[1].binding = 0;
@@ -858,7 +983,7 @@ static VkPipeline createGraphicsPipeline(VkDevice device, VkExtent2D extent, VkR
 	rasterizer.rasterizerDiscardEnable = VK_FALSE;
 	rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
 	rasterizer.lineWidth = 1.0f;
-	rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
+	rasterizer.cullMode = VK_CULL_MODE_NONE;
 	rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE;
 	rasterizer.depthBiasEnable = VK_FALSE;
 
@@ -885,8 +1010,8 @@ static VkPipeline createGraphicsPipeline(VkDevice device, VkExtent2D extent, VkR
 
 	VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
 	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-	pipelineLayoutInfo.setLayoutCount = 0;
-	pipelineLayoutInfo.pSetLayouts = nullptr;
+	pipelineLayoutInfo.setLayoutCount = 1;
+	pipelineLayoutInfo.pSetLayouts = &descriptorSetLayout;
 	pipelineLayoutInfo.pushConstantRangeCount = 0;
 	pipelineLayoutInfo.pPushConstantRanges = nullptr;
 
