@@ -1,4 +1,6 @@
 #define GLFW_INCLUDE_VULKAN
+#define GLM_FORCE_RADIANS
+#define GLM_FORCE_DEPTH_ZERO_TO_ONE
 
 #include "TexturedCubeApp.hpp"
 #include <iostream>
@@ -8,6 +10,8 @@
 #include <fstream>
 #include <filesystem>
 #include <array>
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 
 static VkSurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats);
 static VkPresentModeKHR chooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes);
@@ -38,6 +42,12 @@ const std::vector<Vertex> vertices = {
 	{{-0.5f,  0.5f}, {0.0f, 0.0f, 1.0f}},  // Top left, Blue
 };
 
+
+struct UniformBufferObject {
+	glm::mat4 model;
+	glm::mat4 view;
+	glm::mat4 proj;
+};
 
 void TexturedCubeApp::run() {
 	initWindow();
@@ -136,6 +146,8 @@ void TexturedCubeApp::initVulkan() {
 	std::cout << "Command Pool Created" << std::endl;
 	createCommandBuffers();
 	std::cout << "Command buffers created" << std::endl;
+	createUniformBuffers();
+	std::cout << "Uniform buffers created" << std::endl;
 	recordCommandBuffers(this->renderPass);
 	std::cout << "Command buffers allocated" << std::endl;
 	//end create and allocate command Buffers
@@ -506,6 +518,25 @@ void TexturedCubeApp::drawFrame()
 
 	uint32_t imageIndex;
 	vkAcquireNextImageKHR(device, swapChain, UINT32_MAX, imageAvailableSemaphore, VK_NULL_HANDLE, &imageIndex);
+
+	UniformBufferObject ubo{};
+	float t = static_cast<float>(glfwGetTime());
+
+	// Model: rotate around Z
+	ubo.model = glm::rotate(glm::mat4(1.0f), t, glm::vec3(0.0f, 0.0f, 1.0f));
+
+	// View: camera at +Z looking at origin
+	ubo.view = glm::lookAt(
+		glm::vec3(0.0f, 0.0f, 2.0f),
+		glm::vec3(0.0f, 0.0f, 0.0f),
+		glm::vec3(0.0f, 1.0f, 0.0f)
+	);
+
+	// Projection: perspective; flip Y for Vulkan
+	ubo.proj = glm::perspective(glm::radians(60.0f), swapChainExtent.width / (float)swapChainExtent.height, 0.1f, 100.0f);
+	ubo.proj[1][1] *= -1;
+
+	memcpy(uboMapped[imageIndex], &ubo, sizeof(ubo));
 
 
 	// Optionally: re-record command buffer here for dynamic scenes
