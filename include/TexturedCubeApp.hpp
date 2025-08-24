@@ -45,6 +45,9 @@ private:
 	uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
 	void createSyncObject();
 	void drawFrame();
+	void createDescriptorSetLayout();
+	void createUniformBuffers();
+	void createDescriptorPoolAndSets();
 
 
 	QueueFamilyIndices findQueueFamilies(VkPhysicalDevice decvice, VkSurfaceKHR surface);
@@ -86,5 +89,13 @@ private:
 	VkImageView depthImageView{};
 	VkFormat depthFormat{};
 
+
+	std::vector<VkBuffer> uboBuffers;
+	std::vector<VkDeviceMemory> uboMemories;
+	std::vector<void*> uboMapped;
+
+	VkDescriptorSetLayout descriptorSetLayout{};
+	VkDescriptorPool descriptorPool{};
+	std::vector<VkDescriptorSet> descriptorSets;
 
 };
