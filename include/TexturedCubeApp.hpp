@@ -48,6 +48,16 @@ private:
 	void createDescriptorSetLayout();
 	void createUniformBuffers();
 	void createDescriptorPoolAndSets();
+	
+	
+	void createTextureImage();
+	void createTextureImageView();
+	void createTextureSampler();
+
+	VkCommandBuffer beginSingleTimeCommands();
+	void endSingleTimeCommands(VkCommandBuffer cmd);
+	void transitionImageLayout(VkImage img, VkFormat fmt, VkImageLayout oldL, VkImageLayout newL);
+	void copyBufferToImage(VkBuffer src, VkImage dst, uint32_t width, uint32_t height);
 
 
 	QueueFamilyIndices findQueueFamilies(VkPhysicalDevice decvice, VkSurfaceKHR surface);
@@ -97,5 +107,15 @@ private:
 	VkDescriptorSetLayout descriptorSetLayout{};
 	VkDescriptorPool descriptorPool{};
 	std::vector<VkDescriptorSet> descriptorSets;
+
+
+	VkImage textureImage{};
+	VkDeviceMemory textureImageMemory{};
+	VkImageView textureImageView{};
+	VkSampler textureSampler{};
+
+	// helpers (declare)
+	
+
 
 };
