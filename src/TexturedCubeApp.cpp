@@ -1,6 +1,7 @@
 ﻿#define GLFW_INCLUDE_VULKAN
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
+#define STB_IMAGE_IMPLEMENTATION
 
 #include "TexturedCubeApp.hpp"
 #include <iostream>
@@ -12,6 +13,7 @@
 #include <array>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include "stb_image.h"
 
 static VkSurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats);
 static VkPresentModeKHR chooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes);
@@ -706,9 +708,7 @@ void TexturedCubeApp::createDescriptorSetLayout() {
 	samplerBinding.descriptorCount = 1;
 	samplerBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
-
 	std::array<VkDescriptorSetLayoutBinding, 2> bindings{ uboBinding, samplerBinding };
-
 
 	VkDescriptorSetLayoutCreateInfo info{};
 	info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
@@ -831,13 +831,14 @@ void TexturedCubeApp::createDescriptorPoolAndSets()
 }
 
 VkCommandBuffer TexturedCubeApp::beginSingleTimeCommands() {
-	VkCommandBufferAllocateInfo info{};
-	info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-	info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-	info.commandPool = commandPool;
-	info.commandBufferCount = 1;
-	VkCommandBuffer cmd{};
-	vkAllocateCommandBuffers(device, &info, &cmd);
+	VkCommandBufferAllocateInfo alloc{};
+	alloc.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+	alloc.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+	alloc.commandPool = commandPool;
+	alloc.commandBufferCount = 1;
+
+	VkCommandBuffer cmd;
+	vkAllocateCommandBuffers(device, &alloc, &cmd);
 
 	VkCommandBufferBeginInfo begin{};
 	begin.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -848,11 +849,11 @@ VkCommandBuffer TexturedCubeApp::beginSingleTimeCommands() {
 
 void TexturedCubeApp::endSingleTimeCommands(VkCommandBuffer cmd) {
 	vkEndCommandBuffer(cmd);
-	VkSubmitInfo sub{};
-	sub.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-	sub.commandBufferCount = 1;
-	sub.pCommandBuffers = &cmd;
-	vkQueueSubmit(graphicsQueue, 1, &sub, VK_NULL_HANDLE);
+	VkSubmitInfo submit{};
+	submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+	submit.commandBufferCount = 1;
+	submit.pCommandBuffers = &cmd;
+	vkQueueSubmit(graphicsQueue, 1, &submit, VK_NULL_HANDLE);
 	vkQueueWaitIdle(graphicsQueue);
 	vkFreeCommandBuffers(device, commandPool, 1, &cmd);
 }
@@ -915,72 +916,42 @@ void TexturedCubeApp::copyBufferToImage(VkBuffer src, VkImage dst, uint32_t w, u
 }
 
 void TexturedCubeApp::createTextureImage() {
-	// 256x256 checkerboard (RGBA8)
-	const uint32_t W = 256, H = 256;
-	std::vector<uint8_t> pixels(W * H * 4);
-	for (uint32_t y = 0; y < H; ++y) {
-		for (uint32_t x = 0; x < W; ++x) {
-			bool on = ((x / 32) ^ (y / 32)) & 1;
-			uint8_t c = on ? 255 : 40;
-			size_t i = (y * W + x) * 4;
-			pixels[i + 0] = c;     // R
-			pixels[i + 1] = c;     // G
-			pixels[i + 2] = c;     // B
-			pixels[i + 3] = 255;   // A
-		}
-	}
+	int texW, texH, texC;
+	stbi_uc* pixels = stbi_load("assets/ImageTexture2.jpg", &texW, &texH, &texC, STBI_rgb_alpha);
+	if (!pixels) throw std::runtime_error("Failed to load texture image (assets/brickwall.png)");
 
-	VkDeviceSize size = pixels.size();
+	VkDeviceSize imageSize = static_cast<VkDeviceSize>(texW) * texH * 4;
 
-	// staging buffer
-	VkBuffer stagBuf; VkDeviceMemory stagMem;
-	{
-		VkBufferCreateInfo info{};
-		info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-		info.size = size;
-		info.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-		info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-		vkCreateBuffer(device, &info, nullptr, &stagBuf);
+	VkBuffer stagingBuffer;
+	VkDeviceMemory stagingMemory;
+	createBuffer(imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+		stagingBuffer, stagingMemory);
 
-		VkMemoryRequirements req{};
-		vkGetBufferMemoryRequirements(device, stagBuf, &req);
-		VkMemoryAllocateInfo alloc{};
-		alloc.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-		alloc.allocationSize = req.size;
-		alloc.memoryTypeIndex = findMemoryType(req.memoryTypeBits,
-			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-		vkAllocateMemory(device, &alloc, nullptr, &stagMem);
-		vkBindBufferMemory(device, stagBuf, stagMem, 0);
+	void* data = nullptr;
+	vkMapMemory(device, stagingMemory, 0, imageSize, 0, &data);
+	memcpy(data, pixels, static_cast<size_t>(imageSize));
+	vkUnmapMemory(device, stagingMemory);
+	stbi_image_free(pixels);
 
-		void* data = nullptr;
-		vkMapMemory(device, stagMem, 0, size, 0, &data);
-		memcpy(data, pixels.data(), (size_t)size);
-		vkUnmapMemory(device, stagMem);
-	}
-
-	// device-local image
+	// Create GPU image (sRGB)
 	VkFormat texFormat = VK_FORMAT_R8G8B8A8_SRGB;
-	createImage(device, physicalDevice, W, H, texFormat,
+	createImage(device, physicalDevice, texW, texH, texFormat,
 		VK_IMAGE_TILING_OPTIMAL,
 		VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
 		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
 		textureImage, textureImageMemory);
 
-	transitionImageLayout(textureImage, texFormat,
-		VK_IMAGE_LAYOUT_UNDEFINED,
-		VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+	transitionImageLayout(textureImage, texFormat, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+	copyBufferToImage(stagingBuffer, textureImage, static_cast<uint32_t>(texW), static_cast<uint32_t>(texH));
+	transitionImageLayout(textureImage, texFormat, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
-	copyBufferToImage(stagBuf, textureImage, W, H);
-
-	transitionImageLayout(textureImage, texFormat,
-		VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-
-	vkDestroyBuffer(device, stagBuf, nullptr);
-	vkFreeMemory(device, stagMem, nullptr);
+	vkDestroyBuffer(device, stagingBuffer, nullptr);
+	vkFreeMemory(device, stagingMemory, nullptr);
 }
 
 void TexturedCubeApp::createTextureImageView() {
+	// Reuse your existing createImageView for color aspect:
 	textureImageView = createImageView(device, textureImage, VK_FORMAT_R8G8B8A8_SRGB);
 }
 
@@ -989,20 +960,47 @@ void TexturedCubeApp::createTextureSampler() {
 	info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
 	info.magFilter = VK_FILTER_LINEAR;
 	info.minFilter = VK_FILTER_LINEAR;
+	info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
 	info.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
 	info.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
 	info.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-	info.anisotropyEnable = VK_FALSE;   // keep simple; no feature enable
+	info.mipLodBias = 0.0f;
+	info.anisotropyEnable = VK_FALSE;        // keep off for now (simple path)
 	info.maxAnisotropy = 1.0f;
+	info.compareEnable = VK_FALSE;
+	info.compareOp = VK_COMPARE_OP_ALWAYS;
+	info.minLod = 0.0f;
+	info.maxLod = 0.0f;                      // no mipmaps yet
 	info.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
 	info.unnormalizedCoordinates = VK_FALSE;
-	info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-	info.minLod = 0.0f;
-	info.maxLod = 0.0f;
 
 	if (vkCreateSampler(device, &info, nullptr, &textureSampler) != VK_SUCCESS)
-		throw std::runtime_error("Failed to create sampler");
+		throw std::runtime_error("Failed to create texture sampler");
 }
+
+void TexturedCubeApp::createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags props, VkBuffer& buffer, VkDeviceMemory& memory) {
+	VkBufferCreateInfo info{};
+	info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+	info.size = size;
+	info.usage = usage;
+	info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+	if (vkCreateBuffer(device, &info, nullptr, &buffer) != VK_SUCCESS)
+		throw std::runtime_error("Failed to create buffer");
+
+	VkMemoryRequirements req{};
+	vkGetBufferMemoryRequirements(device, buffer, &req);
+
+	VkMemoryAllocateInfo alloc{};
+	alloc.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+	alloc.allocationSize = req.size;
+	alloc.memoryTypeIndex = findMemoryType(req.memoryTypeBits, props);
+
+	if (vkAllocateMemory(device, &alloc, nullptr, &memory) != VK_SUCCESS)
+		throw std::runtime_error("Failed to allocate buffer memory");
+
+	vkBindBufferMemory(device, buffer, memory, 0);
+}
+
 
 
 

@@ -16,6 +16,7 @@ include_directories(
     include
     external/glfw-3.4/include
     external/glm
+	external/stb
 )
 
 # Source files
@@ -33,7 +34,9 @@ set(SHADERS_DIR "${CMAKE_SOURCE_DIR}/shaders")
 add_custom_command(TARGET TexturedCubeApp POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:TexturedCubeApp>/shaders"
     COMMAND ${CMAKE_COMMAND} -E copy_directory "${SHADERS_DIR}" "$<TARGET_FILE_DIR:TexturedCubeApp>/shaders"
-    COMMENT "Copying shaders/ to output folder"
+    COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:TexturedCubeApp>/assets
+    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/assets $<TARGET_FILE_DIR:TexturedCubeApp>/assets
+	COMMENT "Copying shaders/ to output folder"
 )
 
 

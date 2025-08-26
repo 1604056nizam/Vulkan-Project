@@ -59,6 +59,7 @@ private:
 	void transitionImageLayout(VkImage img, VkFormat fmt, VkImageLayout oldL, VkImageLayout newL);
 	void copyBufferToImage(VkBuffer src, VkImage dst, uint32_t width, uint32_t height);
 
+	void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags props, VkBuffer& buffer, VkDeviceMemory& memory);
 
 	QueueFamilyIndices findQueueFamilies(VkPhysicalDevice decvice, VkSurfaceKHR surface);
 	SwapChainSupportDetails querySwapChainSupport(VkPhysicalDevice device, VkSurfaceKHR surface);
