@@ -113,9 +113,4 @@ private:
 	VkDeviceMemory textureImageMemory{};
 	VkImageView textureImageView{};
 	VkSampler textureSampler{};
-
-	// helpers (declare)
-	
-
-
 };

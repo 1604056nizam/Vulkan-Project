@@ -1,4 +1,4 @@
-#define GLFW_INCLUDE_VULKAN
+﻿#define GLFW_INCLUDE_VULKAN
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 
@@ -38,9 +38,56 @@ struct Vertex {
 };
 
 const std::vector<Vertex> vertices = {
-	{{ 0.0f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.5f,0.0f}},  // Bottom center, Red
-	{{ 0.5f,  0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}, {1.0f,1.0f}},  // Top right, Green
-	{{-0.5f,  0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.0f,1.0f}},  // Top left, Blue
+	// Front (+Z)
+	{{-0.5f,-0.5f, 0.5f}, {1,0,0}, {0,0}},
+	{{ 0.5f,-0.5f, 0.5f}, {0,1,0}, {1,0}},
+	{{ 0.5f, 0.5f, 0.5f}, {0,0,1}, {1,1}},
+	{{-0.5f, 0.5f, 0.5f}, {1,1,0}, {0,1}},
+
+	// Back (−Z)
+	{{ 0.5f,-0.5f,-0.5f}, {1,0,1}, {0,0}},
+	{{-0.5f,-0.5f,-0.5f}, {0,1,1}, {1,0}},
+	{{-0.5f, 0.5f,-0.5f}, {1,0.5f,0}, {1,1}},
+	{{ 0.5f, 0.5f,-0.5f}, {0.5f,0,1}, {0,1}},
+
+	// Left (−X)
+	{{-0.5f,-0.5f,-0.5f}, {1,0,0}, {0,0}},
+	{{-0.5f,-0.5f, 0.5f}, {0,1,0}, {1,0}},
+	{{-0.5f, 0.5f, 0.5f}, {0,0,1}, {1,1}},
+	{{-0.5f, 0.5f,-0.5f}, {1,1,0}, {0,1}},
+
+	// Right (+X)
+	{{ 0.5f,-0.5f, 0.5f}, {1,0,1}, {0,0}},
+	{{ 0.5f,-0.5f,-0.5f}, {0,1,1}, {1,0}},
+	{{ 0.5f, 0.5f,-0.5f}, {1,0.5f,0}, {1,1}},
+	{{ 0.5f, 0.5f, 0.5f}, {0.5f,0,1}, {0,1}},
+
+	// Top (+Y)
+	{{-0.5f, 0.5f, 0.5f}, {1,0,0}, {0,0}},
+	{{ 0.5f, 0.5f, 0.5f}, {0,1,0}, {1,0}},
+	{{ 0.5f, 0.5f,-0.5f}, {0,0,1}, {1,1}},
+	{{-0.5f, 0.5f,-0.5f}, {1,1,0}, {0,1}},
+
+	// Bottom (−Y)
+	{{-0.5f,-0.5f,-0.5f}, {1,0,1}, {0,0}},
+	{{ 0.5f,-0.5f,-0.5f}, {0,1,1}, {1,0}},
+	{{ 0.5f,-0.5f, 0.5f}, {1,0.5f,0}, {1,1}},
+	{{-0.5f,-0.5f, 0.5f}, {0.5f,0,1}, {0,1}},
+};
+
+const std::vector<uint32_t> indices = {
+	// Front
+	0,1,2,  2,3,0,
+	// Back
+	4,5,6,  6,7,4,
+	// Left
+	8,9,10, 10,11,8,
+	// Right
+	12,13,14, 14,15,12,
+	// Top
+	16,17,18, 18,19,16,
+	// Bottom
+	20,21,22, 22,23,20
 };
 
 
@@ -139,6 +186,8 @@ void TexturedCubeApp::initVulkan() {
 
 	createVertexBuffer();
 	//create and allcoated command Buffers
+	createIndexBuffer();
+	std::cout << "Index Buffer created" << std::endl;
 	createCommandPool();
 	std::cout << "Command Pool Created" << std::endl;
 	createCommandBuffers();
@@ -202,6 +251,8 @@ void TexturedCubeApp::cleanUp() {
 	vkDestroySemaphore(device, imageAvailableSemaphore, nullptr);
 	vkDestroyFence(device, inFlightFence, nullptr);
 	vkDestroyCommandPool(device, commandPool, nullptr);
+	vkDestroyBuffer(device, indexBuffer, nullptr);
+	vkFreeMemory(device, indexBufferMemory, nullptr);
 	vkDestroyBuffer(device, vertexBuffer, nullptr);
 	vkFreeMemory(device, vertexBufferMemory, nullptr);
 	vkDestroySampler(device, textureSampler, nullptr);
@@ -434,6 +485,8 @@ void TexturedCubeApp::recordCommandBuffers(VkRenderPass renderPass)
 		VkBuffer vertexBuffers[] = { vertexBuffer };
 		VkDeviceSize offsets[] = { 0 };
 		vkCmdBindVertexBuffers(commandBuffers[i], 0, 1, vertexBuffers, offsets);
+		vkCmdBindIndexBuffer(commandBuffers[i], indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+		vkCmdDrawIndexed(commandBuffers[i], static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
 
 		// Use the actual number of vertices
 		vkCmdDraw(commandBuffers[i], static_cast<uint32_t>(vertices.size()), 1, 0, 0);
@@ -480,6 +533,41 @@ void TexturedCubeApp::createVertexBuffer() {
 	memcpy(data, vertices.data(), (size_t)bufferSize);
 	vkUnmapMemory(device, vertexBufferMemory);
 }
+
+void TexturedCubeApp::createIndexBuffer() {
+	VkDeviceSize bufferSize = sizeof(indices[0]) * indices.size();
+
+	VkBufferCreateInfo info{};
+	info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+	info.size = bufferSize;
+	info.usage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
+	info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+	if (vkCreateBuffer(device, &info, nullptr, &indexBuffer) != VK_SUCCESS)
+		throw std::runtime_error("Failed to create index buffer");
+
+	VkMemoryRequirements req{};
+	vkGetBufferMemoryRequirements(device, indexBuffer, &req);
+
+	VkMemoryAllocateInfo alloc{};
+	alloc.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+	alloc.allocationSize = req.size;
+	alloc.memoryTypeIndex = findMemoryType(
+		req.memoryTypeBits,
+		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
+	);
+
+	if (vkAllocateMemory(device, &alloc, nullptr, &indexBufferMemory) != VK_SUCCESS)
+		throw std::runtime_error("Failed to allocate index buffer memory");
+
+	vkBindBufferMemory(device, indexBuffer, indexBufferMemory, 0);
+
+	void* data = nullptr;
+	vkMapMemory(device, indexBufferMemory, 0, bufferSize, 0, &data);
+	memcpy(data, indices.data(), (size_t)bufferSize);
+	vkUnmapMemory(device, indexBufferMemory);
+}
+
 
 bool TexturedCubeApp::isDeviceSuitable(VkPhysicalDevice device, VkSurfaceKHR surface) {
 	uint32_t queueFamilyCount = 0;
@@ -553,7 +641,7 @@ void TexturedCubeApp::drawFrame()
 	float t = static_cast<float>(glfwGetTime());
 
 	// Model: rotate around Z
-	ubo.model = glm::rotate(glm::mat4(1.0f), t, glm::vec3(0.0f, 0.0f, 1.0f));
+	ubo.model = glm::rotate(glm::mat4(1.0f), t, glm::vec3(0.5f, 1.0f, 0.0f));
 
 	// View: camera at +Z looking at origin
 	ubo.view = glm::lookAt(
