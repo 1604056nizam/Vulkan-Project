@@ -49,15 +49,9 @@ TexturedCubeApp.exe
 ```
 ---
 
-## Further Modification
-You can open this project in your visual studio and modify according to your wish
-
----
 
 ##Output
 [▶Watch the demo video on Google Drive](https://drive.google.com/file/d/1vcL_xPUbLJk3AOCkBchB2sbul4h4D7r8/view?usp=drive_link)
 
  ##Image
 ![Demo Image](assets/media/demo.png)
-
----
